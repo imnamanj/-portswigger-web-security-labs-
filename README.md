@@ -12,13 +12,13 @@ B.Tech Cybersecurity Engineering Student | Application Security Learner
 | Topic | Total Labs | Completed | Status |
 |-------|-----------|-----------|--------|
 | SQL Injection | 18 | 18 | ✅ Complete |
-| Authentication | 14 | 0 | ⏳ Upcoming |
+| Authentication | 14 | 6 | 🔄 In Progress |
 | Access Control | 13 | 0 | ⏳ Upcoming |
 | XSS | 30 | 0 | ⏳ Upcoming |
 | CSRF | 8 | 0 | ⏳ Upcoming |
 | SSRF | 7 | 0 | ⏳ Upcoming |
 | XXE | 9 | 0 | ⏳ Upcoming |
-| **Total** | **99** | **18** | |
+| **Total** | **99** | **24** | |
 
 ---
 
