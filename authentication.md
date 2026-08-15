@@ -1,288 +1,123 @@
-### Lab 1 — Username Enumeration via Different Responses ✅
-**Difficulty:** Apprentice  
+# PortSwigger — Authentication Labs
+### Naman Yuvraj
+
+6/14 In Progress 🔄 | Tools: Burp Suite Pro, Kali Linux
+
+---
+
+## Lab 1 — Username Enumeration via Different Responses ✅
 **Vulnerability:** Username enumeration via different error messages
 
-**What I did:**
-- Intercepted login POST request in Burp Suite
-- Sent to Intruder for Sniper attack on username field
-- Identified valid username from different response length
-- Ran second Sniper attack on password field
-- Successfully logged in with found credentials
+Send the login request to the Intruder and do the Sniper attack by adding username.
 
-**Step 1 — Find Valid Username (Sniper Attack):**
 ```
-→ Login request → Send to Intruder
-→ Attack Type: Sniper
-→ Mark username field as payload position
-→ Payload: Username wordlist (Burp built-in list)
-→ Run attack
-→ Filter by response length — different length = valid username
-
-Found Username: applications
+Username found: applications
+Password found: 131313
 ```
 
-**Step 2 — Find Password (Sniper Attack):**
-```
-→ Same request with found username
-→ Mark password field as payload position
-→ Payload: Password wordlist (Burp built-in list)
-→ Run attack
-→ Filter by response length or status code 302
+Sniper attack on username → different response length reveals valid username, same method for password.
 
-Found Password: 131313
-```
-
-**Credentials Found:**
-```
-Username: applications
-Password: 131313
-```
-
-**What I Learned:**
-- Different error messages reveal if username is valid
-- "Invalid username" vs "Incorrect password" = username enumeration
-- Burp Intruder Sniper automates username and password brute force
-- Response length difference identifies valid usernames
-- Always use same error message for both invalid user and wrong password
+![Lab 1](screenshots/authentication/lab1.png)
 
 ---
 
-### Lab 2 — Username Enumeration via Subtly Different Responses ✅
-**Difficulty:** Apprentice  
+## Lab 2 — Username Enumeration via Subtly Different Responses ✅
 **Vulnerability:** Minor difference in error message reveals valid username
 
-**What I did:**
-- Intercepted login request and sent to Intruder
-- Used Grep Extract to capture error message differences
-- Found subtle difference in response for valid username
-- Brute forced password using found username
+Send the login request to Intruder and do Sniper attack on username field.
 
-**Payloads Used:**
 ```
-Step 1 → Intruder → Sniper attack on username
-Step 2 → Options → Grep Extract
-         Add error message to extract
-Step 3 → Look for subtle difference:
-         Invalid user → "Invalid username or password."
-         Valid user   → "Invalid username or password"
-                        (missing full stop!)
-Step 4 → Note valid username
-Step 5 → Brute force password with same method
+Invalid username → "Invalid username or password."
+Valid username   → "Invalid username or password"
+                   (dot missing at the end)
 ```
 
-**What I Learned:**
-- Developers sometimes make tiny mistakes in error messages
-- Even one character difference can reveal valid usernames
-- Grep Extract in Burp helps find subtle response differences
-- Always normalize error messages in production applications
+Use Grep Extract in Intruder options to catch this difference.
+Same method for password after finding valid username.
+
+![Lab 2](screenshots/authentication/lab2.png)
 
 ---
 
-### Lab 3 — Password Reset Broken Logic ✅
-**Difficulty:** Apprentice  
+## Lab 3 — Password Reset Broken Logic ✅
 **Vulnerability:** Password reset token not validated against username
 
-**What I did:**
-- Used forgot password feature for own account (wiener)
-- Intercepted password reset request in Burp Repeater
-- Changed password reset token to invalid value
-- Changed username parameter to victim (carlos)
-- Reset carlos password successfully and logged in
-
-**Step by Step:**
 ```
-Step 1 → Click "Forgot password"
-Step 2 → Enter own username: wiener
-Step 3 → Click email link received
-Step 4 → Intercept new password request in Burp
-Step 5 → Send to Repeater
-
-Step 6 → In Repeater change:
-         token=valid-token → token=x
-         username=wiener  → username=carlos
-         password=anything → password=password
-
-Step 7 → Send request
-Step 8 → Login with:
-         Username: carlos
-         Password: password
+Step 1 → Forget the password of username 'wiener'
+Step 2 → Click the email link
+Step 3 → Change the password = 'password'
+Step 4 → Intercept it in Repeater
+Step 5 → Change the password token = 'x'
+Step 6 → Change the username to victim = 'carlos'
+Step 7 → Login using username = carlos, password = 'password'
 ```
 
-**What I Learned:**
-- Password reset token must be validated against the username
-- Server should reject token if username doesn't match
-- Broken logic allows resetting any user's password
-- Always tie reset tokens to specific user accounts
-- This is a Business Logic vulnerability combined with Auth failure
+Token not tied to username — changing both token and username resets any account's password.
+
+![Lab 3](screenshots/authentication/lab3.png)
 
 ---
 
-### Lab 4 — Username Enumeration via Subtly Different Responses ✅
-**Difficulty:** Practitioner  
-**Vulnerability:** Username enumeration through response analysis
+## Lab 4 — Username Enumeration via Subtly Different Responses ✅
+**Vulnerability:** Username enumeration via response analysis
 
-**What I did:**
-- Sent login to Intruder and ran Sniper attack on username
-- All responses showed same message: "Invalid username or password"
-- Sent request to Repeater
-- Tested username NOT in the wordlist
-- Found valid username that way
-
-**Process:**
 ```
-Step 1 → Login → Intruder → Sniper attack
-         Payload: Username wordlist
-         Result: All show "Invalid username or password"
-         (No obvious difference)
-
-Step 2 → Send to Repeater
-Step 3 → Try username NOT in wordlist:
-         username=auction
+Step 1 → Send login to Intruder
+Step 2 → Paste usernames and do Sniper attack
+         All show same: 'Invalid username or password'
+Step 3 → Send login to Repeater
+Step 4 → Change to username NOT in the wordlist
          Result → Different behavior detected
 
-Step 4 → Brute force password for auction:
-         password=12345678
+Username found: auction
+Password found: 12345678
 ```
 
-**Credentials Found:**
-```
-Username: auction
-Password: 12345678
-```
+Valid username was outside the wordlist — manual testing in Repeater revealed it.
 
-**What I Learned:**
-- Sometimes valid username is NOT in common wordlists
-- Testing usernames outside wordlist can reveal valid accounts
-- Repeater helps manually test individual usernames
-- Always test edge cases beyond automated wordlists
-- Response analysis requires careful manual observation
+![Lab 4](screenshots/authentication/lab4.png)
 
 ---
 
-### Lab 5 — Username Enumeration via Response Timing ✅
-**Difficulty:** Practitioner  
-**Vulnerability:** Valid usernames cause longer response time during password check
+## Lab 5 — Username Enumeration via Response Timing ✅
+**Vulnerability:** Valid username causes longer server response time
 
-**What I did:**
-- Used X-Forwarded-For header to bypass IP-based rate limiting
-- Found valid username by measuring response time difference
-- Valid username took longer = server was checking password hash
-- Brute forced password using Pitchfork attack
-
-**Understanding the Timing Attack:**
 ```
-Valid username + wrong password:
-→ Server checks password hash
-→ Hash comparison takes time
-→ Response: ~1087ms (slower)
+X-Forwarded-For: [IP]   (used to bypass IP rate limiting)
 
-Invalid username + wrong password:
-→ Server rejects immediately
-→ No hash comparison needed
-→ Response: ~1034ms (faster)
+wiener   → response time: 1087ms  (valid username = slower)
+adserver → response time: 1034ms  (invalid = faster)
 
-Timing difference reveals valid username
+Password: starwars
+Status code: 302 (successful login)
 ```
 
-**Bypass IP Rate Limiting:**
-```
-Add header to every request:
-X-Forwarded-For: [different IP each request]
+Valid username takes longer — server checks password hash only for valid users.
 
-This tricks server into thinking
-each request comes from different IP
-```
-
-**Timing Results:**
-```
-wiener   → 1087ms (valid username = slower)
-adserver → 1034ms (invalid = faster)
-```
-
-**Find Password:**
-```
-→ Pitchfork attack with valid username
-→ Payload: Password wordlist
-→ Filter by Status Code 302 = login success
-
-Found Password: starwars
-Status Code: 302 (redirect = logged in)
-```
-
-**What I Learned:**
-- Response timing reveals valid usernames even with same error message
-- Password hashing takes measurable time for valid users
-- X-Forwarded-For bypasses simple IP-based rate limiting
-- Pitchfork attack tests one username with many passwords
-- Status code 302 means redirect = successful login
+![Lab 5](screenshots/authentication/lab5.png)
 
 ---
 
-### Lab 6 — Broken Brute Force Protection: IP Block ✅
-**Difficulty:** Practitioner  
+## Lab 6 — Broken Brute Force Protection: IP Block ✅
 **Vulnerability:** IP block resets after successful login
 
-**What I did:**
-- Found that 3 wrong attempts locks IP for 1 minute
-- Discovered that successful login resets the attempt counter
-- Created alternating username list: carlos, wiener, carlos, wiener
-- Used Pitchfork attack with max 1 concurrent request
-- Found carlos password by resetting counter after each 2 attempts
-
-**Understanding the Logic:**
 ```
-Normal behavior:
-Attempt 1 → carlos : wrong   (1 fail)
-Attempt 2 → carlos : wrong   (2 fails)
-Attempt 3 → carlos : wrong   (3 fails = LOCKED)
+After 3 wrong attempts → login locked for 1 min
 
-Bypass logic:
-Attempt 1 → carlos  : wrong password  (1 fail)
-Attempt 2 → wiener  : correct password (RESET counter)
-Attempt 3 → carlos  : wrong password  (1 fail again)
-Attempt 4 → wiener  : correct password (RESET again)
-(Never reaches 3 fails for carlos)
+Fix: Make alternating list —
+carlos → wrong password   (1 fail)
+wiener → correct password (counter resets)
+carlos → wrong password   (1 fail again)
+wiener → correct password (counter resets)
+(never reaches 3 fails)
+
+Send to Intruder → add both username and password
+Attack type: Pitchfork
+Resource Pool: new pool, maximum concurrent requests = 1
+
+Password found: george
 ```
 
-**Username List Created:**
-```
-carlos
-wiener
-carlos
-wiener
-carlos
-wiener
-(alternating — same count as password list)
-```
+IP block resets on valid login — alternating list bypasses the protection completely.
 
-**Burp Intruder Setup:**
-```
-→ Attack Type: Pitchfork
-→ Position 1: username field
-→ Position 2: password field
-
-Username payload list:
-carlos, wiener, carlos, wiener...
-
-Password payload list:
-[wrong passwords], peter, [wrong], peter...
-(wiener's password "peter" on even positions)
-
-Resource Pool Settings:
-→ Create new resource pool
-→ Maximum concurrent requests: 1
-→ (Must be 1 to maintain order)
-```
-
-**Result:**
-```
-Found carlos password: george
-Status code 302 = successful login ✅
-```
-
-**What I Learned:**
-- IP block that resets on valid login is bypassable
-- Alternating valid login resets the brute force counter
-- Pitchfork attack pairs usernames with passwords in order
-- Maximum concurrent requests must be 1 to maintain sequence
-- Rate limiting must be based on username not just IP
+![Lab 6](screenshots/authentication/lab6.png)
